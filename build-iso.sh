@@ -128,7 +128,7 @@ configure_repositories() {
   
   if [[ "$BRANCH" == "stable" ]]; then
     msg_info "Configuring compression level for stable branch"
-    sudo sed -i 's/-Xcompression-level [0-9]\+/-Xcompression-level 20/g' /usr/lib/manjaro-tools/util-iso.sh
+    sudo sed -i 's/-Xcompression-level [0-9]\+/-Xcompression-level 7/g' /usr/lib/manjaro-tools/util-iso.sh
   else
     msg_info "Configuring compression level for testing/unstable branch"
     sudo sed -i 's/-Xcompression-level [0-9]\+/-Xcompression-level 7/g' /usr/lib/manjaro-tools/util-iso.sh
