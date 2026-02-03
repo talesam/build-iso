@@ -72,19 +72,37 @@ prepare_directories() {
   mkdir -p "$WORK_PATH" &>/dev/null
   
   # Clean cache directories if they exist
-  local path_dirs=(
-    '/usr/share/manjaro-tools'
-    '/usr/lib/manjaro-tools'
-    '/var/lib/manjaro-tools/buildiso'
-    '/var/cache/manjaro-tools/iso'
-  )
-  
-  for cpath in "${path_dirs[@]}"; do
-    if [[ -d "$cpath" ]]; then
-      msg_info "Cleaning directory: $cpath"
-      sudo rm -rf "$cpath"/* || true
-    fi
-  done
+  # Skip cleaning system directories on local builds
+  if [[ "${LOCAL_BUILD:-false}" == "true" ]]; then
+    msg_info "Local build detected - restoring manjaro-tools to clean state"
+    
+    # Reinstall manjaro-tools packages to restore original files
+    # This is necessary because the script modifies these files
+    msg_info "Reinstalling manjaro-tools packages..."
+    sudo pacman -S --noconfirm manjaro-tools-iso-git manjaro-tools-base-git manjaro-tools-yaml-git &>/dev/null || true
+    
+    # Only clean cache directories on local builds
+    for cpath in '/var/lib/manjaro-tools/buildiso' '/var/cache/manjaro-tools/iso'; do
+      if [[ -d "$cpath" ]]; then
+        msg_info "Cleaning directory: $cpath"
+        sudo rm -rf "$cpath"/* || true
+      fi
+    done
+  else
+    local path_dirs=(
+      '/usr/share/manjaro-tools'
+      '/usr/lib/manjaro-tools'
+      '/var/lib/manjaro-tools/buildiso'
+      '/var/cache/manjaro-tools/iso'
+    )
+    
+    for cpath in "${path_dirs[@]}"; do
+      if [[ -d "$cpath" ]]; then
+        msg_info "Cleaning directory: $cpath"
+        sudo rm -rf "$cpath"/* || true
+      fi
+    done
+  fi
 }
 
 # Clone ISO profiles repository
@@ -128,7 +146,7 @@ configure_repositories() {
   
   if [[ "$BRANCH" == "stable" ]]; then
     msg_info "Configuring compression level for stable branch"
-    sudo sed -i 's/-Xcompression-level [0-9]\+/-Xcompression-level 7/g' /usr/lib/manjaro-tools/util-iso.sh
+    sudo sed -i 's/-Xcompression-level [0-9]\+/-Xcompression-level 20/g' /usr/lib/manjaro-tools/util-iso.sh
   else
     msg_info "Configuring compression level for testing/unstable branch"
     sudo sed -i 's/-Xcompression-level [0-9]\+/-Xcompression-level 7/g' /usr/lib/manjaro-tools/util-iso.sh
@@ -319,7 +337,7 @@ setup_manjaro_tools() {
   
   # Modify ISO filename format
   msg_info "Modifying ISO filename format"
-  sudo sed -i "s/_\${profile}\${_edition}_\${dist_release//./}/-live/" /usr/lib/manjaro-tools/util-iso.sh
+  sudo sed -i 's/_${profile}${_edition}_${dist_release\/\/\.\/}/-live/' /usr/lib/manjaro-tools/util-iso.sh
   
   # Configure profile
   msg_info "Setting profile path"
@@ -677,7 +695,9 @@ build_iso() {
   msg_info "Executing buildiso command"
   LC_ALL=C sudo -u "$USERNAME" bash -c "buildiso -q -v"
   
-  if $DEBUG; then
+  # For local builds or debug mode, show full output
+  if [[ "${LOCAL_BUILD:-false}" == "true" ]] || $DEBUG; then
+    msg_info "Running buildiso with verbose output..."
     LC_ALL=C sudo -u "$USERNAME" bash -c "buildiso -d zstd -f -p $EDITION -b $MANJARO_BRANCH -k linux${KERNEL_NAME};exit \$?"
   else
     LC_ALL=C sudo -u "$USERNAME" bash -c "buildiso -d zstd -f -p $EDITION -b $MANJARO_BRANCH -k linux${KERNEL_NAME} > /dev/null 2>&1; exit \$?"
