@@ -387,6 +387,7 @@ build_iso() {
   export USERNAME="$USER"
   export HOME_FOLDER="$HOME"
   export DISTRONAME="$DISTRO"
+  export DISTRONAME_ISOPROFILES="$DISTRO"
   export EDITION="$EDITION"
   export MANJARO_BRANCH="$MANJARO_BRANCH"
   export BIGCOMMUNITY_BRANCH="$BIGCOMMUNITY_BRANCH"
@@ -394,10 +395,18 @@ build_iso() {
   export KERNEL="$KERNEL"
   export WORK_PATH="$OUTPUT_DIR/work"
   export WORK_PATH_ISO_PROFILES="$OUTPUT_DIR/work/iso-profiles"
+  export PROFILE_PATH="$OUTPUT_DIR/work/iso-profiles/$DISTRO"
+  export PROFILE_PATH_EDITION="$OUTPUT_DIR/work/iso-profiles/$DISTRO/$EDITION"
   export ISO_PROFILES_REPO="https://github.com/big-comm/iso-profiles"
+  export PATH_MANJARO_ISO_PROFILES="/usr/share/manjaro-tools/iso-profiles"
+  export PATH_MANJARO_TOOLS="/usr/share/manjaro-tools"
+  export VAR_CACHE_MANJARO_TOOLS="/var/cache/manjaro-tools"
+  export VAR_CACHE_MANJARO_TOOLS_ISO="/var/cache/manjaro-tools/iso"
   export SCOPE="full"
   export OFFICE="false"
   export RELEASE_TAG="$(date +%Y.%m.%d)"
+  export DEBUG="false"
+  export LOCAL_BUILD="true"  # Skip cleaning system directories
   
   # Create work directory
   mkdir -p "$WORK_PATH"
@@ -406,17 +415,49 @@ build_iso() {
   msg_info "Este processo pode demorar de 30 minutos a 2 horas"
   echo
   
-  # Run the main build script
+  # Run the main build script (using source to maintain environment)
   cd "$SCRIPT_DIR"
-  if bash ./build-iso.sh; then
+  set +e  # Disable exit on error temporarily
+  source ./build-iso.sh
+  local build_result=$?
+  set -e
+  
+  if [[ $build_result -eq 0 ]]; then
     msg_ok "ISO gerada com sucesso!"
     msg_info "Arquivo disponível em: $OUTPUT_DIR"
+    
+    # Offer cleanup
+    echo
+    read -rp "Deseja limpar arquivos temporários? [s/N] " cleanup_response
+    if [[ "${cleanup_response,,}" =~ ^(s|sim|y|yes)$ ]]; then
+      cleanup_build
+    fi
   else
-    die "Falha ao gerar ISO. Verifique os logs acima."
+    msg_warning "Falha ao gerar ISO. Verifique os logs acima."
   fi
   
   echo
   read -rp "Pressione ENTER para continuar..."
+}
+
+# Cleanup function
+cleanup_build() {
+  msg "Limpando arquivos temporários..."
+  
+  # Clean manjaro-tools cache
+  if [[ -d "/var/cache/manjaro-tools" ]]; then
+    msg_info "Limpando cache do manjaro-tools..."
+    sudo rm -rf /var/cache/manjaro-tools/iso/* 2>/dev/null || true
+    sudo rm -rf /var/lib/manjaro-tools/buildiso/* 2>/dev/null || true
+  fi
+  
+  # Clean work directory (except ISO output)
+  if [[ -d "$OUTPUT_DIR/work" ]]; then
+    msg_info "Limpando diretório de trabalho..."
+    rm -rf "$OUTPUT_DIR/work" 2>/dev/null || true
+  fi
+  
+  msg_ok "Limpeza concluída!"
 }
 
 # =============================================================================
@@ -432,7 +473,8 @@ show_menu() {
     echo -e "${cyan}║${reset} 1. Configurar ambiente (primeira vez)${cyan}║${reset}"
     echo -e "${cyan}║${reset} 2. Configurar diretório de saída     ${cyan}║${reset}"
     echo -e "${cyan}║${reset} 3. Gerar ISO                         ${cyan}║${reset}"
-    echo -e "${cyan}║${reset} 4. Sair                              ${cyan}║${reset}"
+    echo -e "${cyan}║${reset} 4. Limpar cache de compilação        ${cyan}║${reset}"
+    echo -e "${cyan}║${reset} 0. Sair                              ${cyan}║${reset}"
     echo -e "${cyan}╚══════════════════════════════════════╝${reset}"
     echo
     echo -e "${white}Diretório atual:${reset} ${yellow}$OUTPUT_DIR${reset}"
@@ -444,6 +486,10 @@ show_menu() {
       2) configure_output_dir ;;
       3) build_iso ;;
       4) 
+        cleanup_build
+        read -rp "Pressione ENTER para continuar..."
+        ;;
+      0) 
         msg_ok "Até logo!"
         exit 0
         ;;
