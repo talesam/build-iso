@@ -167,14 +167,10 @@ configure_repositories() {
   sudo sed -i '/ParallelDownloads/s/#//' "$PATH_MANJARO_TOOLS/pacman-multilib.conf"
   sudo sed -i '/ParallelDownloads/s/ParallelDownloads =.*/ParallelDownloads = 10/' "$PATH_MANJARO_TOOLS/pacman-multilib.conf"
 
-  # Configure XferCommand with curl for timeout and retry support
-  msg_info "Configuring XferCommand with curl (timeout=10s, retry=5)"
-  local xfer_cmd='XferCommand = /usr/bin/curl -L -C - -f -o %o --connect-timeout 10 --retry 5 --retry-delay 3 %u'
-  if ! grep -q '^XferCommand' "$PATH_MANJARO_TOOLS/pacman-default.conf"; then
-    sudo sed -i "/^\[options\]/a ${xfer_cmd}" "$PATH_MANJARO_TOOLS/pacman-default.conf"
-  fi
-  if ! grep -q '^XferCommand' "$PATH_MANJARO_TOOLS/pacman-multilib.conf"; then
-    sudo sed -i "/^\[options\]/a ${xfer_cmd}" "$PATH_MANJARO_TOOLS/pacman-multilib.conf"
+  # Rank mirrors by speed to avoid slow/dead mirrors during build
+  msg_info "Ranking mirrors by speed (fasttrack top 5)"
+  if command -v pacman-mirrors &>/dev/null; then
+    sudo pacman-mirrors --fasttrack 5 2>/dev/null || msg_warning "pacman-mirrors ranking failed, using default mirrors"
   fi
 }
 
